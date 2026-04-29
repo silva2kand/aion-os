@@ -1370,6 +1370,7 @@ const ChatView = () => {
     activeAgent,
     currentTheme,
     settings,
+    updateSettings,
     activeConnectors,
     localAIStatus,
     checkLocalAI,
@@ -1391,8 +1392,11 @@ const ChatView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showAgentPanel, setShowAgentPanel] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [composerMode, setComposerMode] = useState('chat');
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const inputRef = useRef(null);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -1469,8 +1473,75 @@ const ChatView = () => {
   useEffect(scrollToBottom, [messages]);
 
   useEffect(() => {
+    if (!inputRef.current) return;
+    inputRef.current.style.height = 'auto';
+    inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 180)}px`;
+  }, [inputText]);
+
+  useEffect(() => {
     checkLocalAI?.();
   }, []);
+
+  const availableModelOptions = [
+    ...localAIStatus.jan.models.map(model => ({ provider: 'jan', value: model.id || model.name, label: `Jan · ${model.id || model.name}` })),
+    ...localAIStatus.ollama.models.map(model => ({ provider: 'ollama', value: model.name || model.model, label: `Ollama · ${model.name || model.model}` })),
+    ...localAIStatus.lmStudio.models.map(model => ({ provider: 'lmstudio', value: model.id || model.name, label: `LM Studio · ${model.id || model.name}` })),
+  ].filter(option => option.value);
+
+  const selectedModelValue = settings.defaultModel === 'jan'
+    ? `jan:${settings.janModel || ''}`
+    : settings.defaultModel === 'lmstudio'
+      ? `lmstudio:${settings.lmStudioModel || ''}`
+      : settings.defaultModel === 'ollama'
+        ? `ollama:${settings.ollamaModel || ''}`
+        : settings.defaultModel || 'auto';
+
+  const handleModelSelection = (value) => {
+    if (value === 'auto') {
+      updateSettings({ defaultModel: 'ollama', ollamaModel: null, janModel: null, lmStudioModel: null });
+      return;
+    }
+
+    if (!value.includes(':')) {
+      updateSettings({ defaultModel: value });
+      return;
+    }
+
+    const [provider, model] = value.split(':');
+    if (provider === 'jan') updateSettings({ defaultModel: 'jan', janModel: model });
+    if (provider === 'ollama') updateSettings({ defaultModel: 'ollama', ollamaModel: model });
+    if (provider === 'lmstudio') updateSettings({ defaultModel: 'lmstudio', lmStudioModel: model });
+  };
+
+  const handleAttachFiles = async () => {
+    const result = await window.electron?.file?.select?.();
+    if (result?.success) {
+      setAttachedFiles(prev => [...prev, ...(result.files || [])]);
+    } else if (result?.error) {
+      alert(result.error);
+    }
+  };
+
+  const removeAttachedFile = (filePath) => {
+    setAttachedFiles(prev => prev.filter(file => file.path !== filePath));
+  };
+
+  const applyPromptPreset = (preset) => {
+    const prompts = {
+      summarize: 'Summarize this clearly and extract the key actions:\n\n',
+      code: 'Help me write or fix this code. Explain the changes briefly:\n\n',
+      email: 'Draft a professional email for this situation:\n\n',
+      task: 'Turn this into a prioritized task plan:\n\n',
+    };
+    setInputText(prev => `${prompts[preset] || ''}${prev}`.trimEnd());
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const clearComposer = () => {
+    setInputText('');
+    setAttachedFiles([]);
+    inputRef.current?.focus();
+  };
 
   const getStoredApiKey = async (provider) => {
     if (!window.electron?.credentials) return '';
@@ -1533,13 +1604,18 @@ const ChatView = () => {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && attachedFiles.length === 0) return;
 
-    const textToSend = inputText.trim();
+    const attachmentContext = attachedFiles.length
+      ? `\n\nAttached files:\n${attachedFiles.map(file => `- ${file.name} (${formatBytes(file.size)}, ${file.category || 'file'}) at ${file.path}`).join('\n')}`
+      : '';
+    const modeContext = composerMode === 'chat' ? '' : `Mode: ${composerMode}\n\n`;
+    const textToSend = `${modeContext}${inputText.trim() || 'Please review the attached file context.'}${attachmentContext}`;
     const providerConfig = resolveChatProvider();
 
     addMessage({ role: 'user', text: textToSend, type: 'text' });
     setInputText('');
+    setAttachedFiles([]);
     setIsLoading(true);
 
     const thinkingId = Date.now() + 1;
@@ -1847,71 +1923,142 @@ const ChatView = () => {
             borderTop: `1px solid ${theme.border}`,
           }}
         >
-          <div className="flex items-end gap-2 max-w-4xl mx-auto">
-            <Button variant="secondary" size="sm" className="flex-shrink-0">
-              📎
-            </Button>
+          <div className="max-w-5xl mx-auto rounded-xl overflow-visible" style={{ border: `1px solid ${theme.border}`, backgroundColor: theme.panel }}>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${theme.border}` }}>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={composerMode}
+                  onChange={(e) => setComposerMode(e.target.value)}
+                  className="px-2 py-1.5 rounded-lg text-xs"
+                  style={{ backgroundColor: theme.input, color: theme.text, border: `1px solid ${theme.border}` }}
+                  title="Conversation mode"
+                >
+                  <option value="chat">Chat</option>
+                  <option value="agent">Agent</option>
+                  <option value="code">Code</option>
+                  <option value="email">Email</option>
+                  <option value="research">Research</option>
+                </select>
 
-            {/* Voice Input Button */}
-            {voiceState.supported && (
-              <Button
-                variant={voiceState.isListening ? 'primary' : 'secondary'}
-                size="sm"
-                className={`flex-shrink-0 ${voiceState.isListening ? 'animate-pulse' : ''}`}
-                onClick={toggleVoiceInput}
-                title={voiceState.isListening ? 'Stop listening' : 'Voice input'}
-              >
-                {voiceState.isListening ? '🎤 🔴' : '🎤'}
-              </Button>
+                <select
+                  value={selectedModelValue}
+                  onChange={(e) => handleModelSelection(e.target.value)}
+                  className="max-w-xs px-2 py-1.5 rounded-lg text-xs"
+                  style={{ backgroundColor: theme.input, color: theme.text, border: `1px solid ${theme.border}` }}
+                  title="Model"
+                >
+                  <option value="auto">Auto model</option>
+                  <option value="jan">Jan Engine</option>
+                  <option value="ollama">Ollama</option>
+                  <option value="lmstudio">LM Studio</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="openrouter">OpenRouter</option>
+                  {availableModelOptions.map(option => (
+                    <option key={`${option.provider}:${option.value}`} value={`${option.provider}:${option.value}`}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <ChatConnectorsButton />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => applyPromptPreset('summarize')}>Summarize</Button>
+                <Button variant="ghost" size="sm" onClick={() => applyPromptPreset('code')}>Code</Button>
+                <Button variant="ghost" size="sm" onClick={() => applyPromptPreset('email')}>Email</Button>
+                <Button variant="ghost" size="sm" onClick={() => applyPromptPreset('task')}>Tasks</Button>
+              </div>
+            </div>
+
+            {attachedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-2 px-3 pt-3">
+                {attachedFiles.map(file => (
+                  <div
+                    key={file.path}
+                    className="flex items-center gap-2 px-2 py-1 rounded-lg text-xs"
+                    style={{ backgroundColor: theme.input, color: theme.text, border: `1px solid ${theme.border}` }}
+                  >
+                    <span>📎</span>
+                    <span className="max-w-48 truncate">{file.name}</span>
+                    <span style={{ color: theme.textMuted }}>{formatBytes(file.size)}</span>
+                    <button onClick={() => removeAttachedFile(file.path)} style={{ color: theme.error }}>×</button>
+                  </div>
+                ))}
+              </div>
             )}
 
-            {/* Connectors Toggle Button */}
-            <ChatConnectorsButton />
+            <div className="flex items-end gap-2 p-3">
+              <Button variant="secondary" size="sm" className="flex-shrink-0" onClick={handleAttachFiles} title="Attach files">
+                📎
+              </Button>
 
-            <div className="flex-1 relative">
-              {voiceState.isListening && (
-                <div
-                  className="absolute -top-8 left-0 px-3 py-1 rounded-lg text-xs font-medium animate-pulse"
-                  style={{ backgroundColor: theme.error, color: '#fff' }}
+              {voiceState.supported && (
+                <Button
+                  variant={voiceState.isListening ? 'primary' : 'secondary'}
+                  size="sm"
+                  className={`flex-shrink-0 ${voiceState.isListening ? 'animate-pulse' : ''}`}
+                  onClick={toggleVoiceInput}
+                  title={voiceState.isListening ? 'Stop listening' : 'Voice input'}
                 >
-                  🎤 Listening... Speak now
-                </div>
+                  {voiceState.isListening ? '🎤 🔴' : '🎤'}
+                </Button>
               )}
-              <textarea
-                placeholder={voiceState.supported ? "Type your message or click 🎤 to speak..." : "Type your message... (Shift+Enter for new line)"}
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyPress={handleKeyPress}
-                rows={1}
-                className="w-full resize-none rounded-lg px-4 py-3 text-sm"
-                style={{
-                  backgroundColor: theme.input,
-                  color: theme.text,
-                  border: `1px solid ${voiceState.isListening ? theme.error : theme.border}`,
-                  outline: 'none',
-                  minHeight: '44px',
-                  maxHeight: '200px',
-                }}
-                onFocus={(e) => e.target.style.borderColor = theme.accent}
-                onBlur={(e) => e.target.style.borderColor = theme.border}
-              />
+
+              <div className="flex-1 relative">
+                {voiceState.isListening && (
+                  <div
+                    className="absolute -top-8 left-0 px-3 py-1 rounded-lg text-xs font-medium animate-pulse"
+                    style={{ backgroundColor: theme.error, color: '#fff' }}
+                  >
+                    Listening... speak now
+                  </div>
+                )}
+                <textarea
+                  ref={inputRef}
+                  placeholder={voiceState.supported ? "Ask Aion anything, attach files, choose a model, or use voice..." : "Ask Aion anything..."}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  rows={1}
+                  className="w-full resize-none rounded-lg px-4 py-3 text-sm"
+                  style={{
+                    backgroundColor: theme.input,
+                    color: theme.text,
+                    border: `1px solid ${voiceState.isListening ? theme.error : theme.border}`,
+                    outline: 'none',
+                    minHeight: '48px',
+                    maxHeight: '180px',
+                    overflowY: 'auto',
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = theme.accent}
+                  onBlur={(e) => e.target.style.borderColor = theme.border}
+                />
+              </div>
+
+              <Button variant="ghost" size="sm" onClick={clearComposer} disabled={!inputText && attachedFiles.length === 0}>
+                Clear
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSend}
+                disabled={(!inputText.trim() && attachedFiles.length === 0) || isLoading}
+                className="flex-shrink-0"
+              >
+                {isLoading ? '⏳' : '➤ Send'}
+              </Button>
             </div>
-            <Button
-              variant="primary"
-              onClick={handleSend}
-              disabled={!inputText.trim() || isLoading}
-              className="flex-shrink-0"
-            >
-              {isLoading ? '⏳' : '➤'}
-            </Button>
           </div>
 
-          <div className="flex justify-center gap-4 mt-2 text-xs" style={{ color: theme.textMuted }}>
+          <div className="flex flex-wrap justify-center gap-3 mt-2 text-xs" style={{ color: theme.textMuted }}>
             <span>Press Enter to send</span>
             <span>•</span>
             <span>Shift+Enter for new line</span>
             <span>•</span>
-            <span>Ctrl+K for quick actions</span>
+            <span>{activeConnectors.length} connectors active</span>
+            <span>•</span>
+            <span>{settings.defaultModel || 'auto'} mode</span>
           </div>
         </div>
       </div>
