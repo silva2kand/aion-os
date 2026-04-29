@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Aion OS v3</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif; }
+  </style>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="root"></div>
+  <script type="importmap">
+    {
+      "imports": {
+        "zustand": "https://unpkg.com/zustand@5.0.12/esm/index.mjs",
+        "react-resizable-panels": "https://unpkg.com/react-resizable-panels@4.10.0/dist/react-resizable-panels.module.js",
+        "lucide-react": "https://unpkg.com/lucide-react/dist/esm/index.js",
+        "framer-motion": "https://unpkg.com/framer-motion@7.5.1/dist/esm/index.mjs"
+      }
+    }
+  </script>
+  <script type="text/babel" src="./app.jsx"></script>
+</body>
+</html>
