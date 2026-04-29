@@ -59,7 +59,12 @@ contextBridge.exposeInMainWorld('electron', {
         syncCli: () => ipcRenderer.invoke('jan:engine:sync-cli'),
         latestInstaller: () => ipcRenderer.invoke('jan:engine:latest-installer'),
         downloadInstaller: () => ipcRenderer.invoke('jan:engine:download-installer'),
-        runInstaller: (params) => ipcRenderer.invoke('jan:engine:run-installer', params)
+        runInstaller: (params) => ipcRenderer.invoke('jan:engine:run-installer', params),
+        onDownloadProgress: (callback) => {
+          const listener = (event, payload) => callback(payload);
+          ipcRenderer.on('jan:download-progress', listener);
+          return () => ipcRenderer.removeListener('jan:download-progress', listener);
+        }
       }
     }
   },
@@ -108,7 +113,8 @@ contextBridge.exposeInMainWorld('electron', {
   // Desktop apps
   app: {
     open: (params) => ipcRenderer.invoke('app:open', params),
-    detect: () => ipcRenderer.invoke('app:detect')
+    detect: () => ipcRenderer.invoke('app:detect'),
+    checkUpdate: () => ipcRenderer.invoke('app:check-update')
   },
 
   // Email channels
@@ -132,7 +138,8 @@ contextBridge.exposeInMainWorld('electron', {
   
   // System
   system: {
-    info: () => ipcRenderer.invoke('system:info')
+    info: () => ipcRenderer.invoke('system:info'),
+    health: () => ipcRenderer.invoke('system:health')
   },
   
   // Terminal

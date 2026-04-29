@@ -17,8 +17,8 @@ $shell = New-Object -ComObject WScript.Shell
 $shortcut = $shell.CreateShortcut($shortcutPath)
 
 # Set shortcut properties
-$shortcut.TargetPath = "C:\Windows\System32\cmd.exe"
-$shortcut.Arguments = "/c `"cd /d `"$scriptDir`" && npm start`""
+$shortcut.TargetPath = Join-Path $scriptDir "start-aion.bat"
+$shortcut.Arguments = ""
 $shortcut.WorkingDirectory = $scriptDir
 $shortcut.Description = "Aion OS - AI Desktop Platform"
 $shortcut.IconLocation = "%SystemRoot%\System32\imageres.dll,5"

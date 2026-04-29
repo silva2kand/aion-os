@@ -3194,6 +3194,15 @@ const JanAIView = () => {
     loadModelCatalog();
   }, [searchQuery, modelCategory]);
 
+  useEffect(() => {
+    const unsubscribe = window.electron?.local?.jan?.engine?.onDownloadProgress?.((payload) => {
+      setInstallerState(payload);
+    });
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, []);
+
   const loadModelCatalog = async () => {
     if (!window.electron?.local?.models) return;
     const result = await window.electron.local.models.search({ query: searchQuery, category: modelCategory });
@@ -3286,7 +3295,7 @@ const JanAIView = () => {
   };
 
   const handleDownloadJanInstaller = async () => {
-    setInstallerState('downloading');
+    setInstallerState({ progress: 0, downloaded: 0, total: 0 });
     const result = await window.electron.local.jan.engine.downloadInstaller();
     setInstallerState(null);
     if (result?.success) {
@@ -3460,11 +3469,29 @@ const JanAIView = () => {
               <Button variant="secondary" size="sm" onClick={handleSyncJanCli}>
                 🔁 Sync CLI
               </Button>
-              <Button variant="primary" size="sm" disabled={installerState === 'downloading'} onClick={handleDownloadJanInstaller}>
-                {installerState === 'downloading' ? 'Downloading...' : '⬇️ Get Jan'}
+              <Button variant="primary" size="sm" disabled={Boolean(installerState)} onClick={handleDownloadJanInstaller}>
+                {installerState ? `Downloading ${installerState.progress || 0}%` : '⬇️ Get Jan'}
               </Button>
             </div>
           </div>
+
+          {installerState && (
+            <div className="mb-4">
+              <div className="flex items-center justify-between text-xs mb-1" style={{ color: theme.textMuted }}>
+                <span>{installerState.fileName || 'Jan installer'}</span>
+                <span>{formatBytes(installerState.downloaded)} / {formatBytes(installerState.total)}</span>
+              </div>
+              <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: theme.input }}>
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ backgroundColor: installerState.error ? theme.error : theme.accent, width: `${installerState.progress || 0}%` }}
+                />
+              </div>
+              {installerState.error && (
+                <div className="text-xs mt-1" style={{ color: theme.error }}>{installerState.error}</div>
+              )}
+            </div>
+          )}
 
           {janEngineModels.length > 0 ? (
             <div className="space-y-2">
@@ -3528,6 +3555,9 @@ const JanAIView = () => {
                 {pcCapabilities.gpus.map(gpu => `${gpu.name} (${formatBytes(gpu.vramBytes)})`).join(' • ')}
               </div>
             )}
+            <div className="mt-2 text-xs" style={{ color: theme.textMuted }}>
+              VRAM is estimated from Windows adapter data and may be inaccurate on some modern GPUs.
+            </div>
           </Card>
         )}
 

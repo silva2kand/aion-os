@@ -1,3 +1,10 @@
 @echo off
-cd /d "C:\Users\Silva\WorkSpace\quick_chat\aion-os"
-npm start
+setlocal
+cd /d "%~dp0"
+set ELECTRON_RUN_AS_NODE=
+
+if exist "%~dp0node_modules\electron\dist\electron.exe" (
+  "%~dp0node_modules\electron\dist\electron.exe" .
+) else (
+  npm start
+)

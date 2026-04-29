@@ -411,15 +411,24 @@ function syncJanCliIntoAion() {
   }
 
   const dest = path.join(janDir, 'jan.exe');
-  fs.copyFileSync(source, dest);
-  return { success: true, source, dest };
+  try {
+    fs.copyFileSync(source, dest);
+    return { success: true, source, dest };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Failed to copy Jan CLI: ${error.message}`,
+      source,
+      dest,
+    };
+  }
 }
 
 async function getLatestJanWindowsAsset() {
   const client = requireAxios();
   const response = await client.get('https://api.github.com/repos/janhq/jan/releases/latest', {
     headers: { 'User-Agent': 'AionOS' },
-    timeout: 30000,
+    timeout: 10000,
   });
   const asset = (response.data.assets || []).find((item) => /x64-setup\.exe$/i.test(item.name));
   if (!asset) throw new Error('No Windows Jan setup asset was found in the latest release.');
@@ -824,14 +833,42 @@ ipcMain.handle('jan:engine:download-installer', async () => {
       timeout: 10 * 60 * 1000,
       headers: { 'User-Agent': 'AionOS' },
     });
+    let downloaded = 0;
+    const total = Number(response.headers['content-length']) || asset.size || 0;
     await new Promise((resolve, reject) => {
       const writer = fs.createWriteStream(dest);
+      response.data.on('data', (chunk) => {
+        downloaded += chunk.length;
+        if (mainWindow && total) {
+          mainWindow.webContents.send('jan:download-progress', {
+            progress: Math.min(100, Math.round((downloaded / total) * 100)),
+            downloaded,
+            total,
+            fileName: asset.name,
+          });
+        }
+      });
       response.data.pipe(writer);
       writer.on('finish', resolve);
       writer.on('error', reject);
     });
+    if (mainWindow) {
+      mainWindow.webContents.send('jan:download-progress', {
+        progress: 100,
+        downloaded,
+        total: total || downloaded,
+        fileName: asset.name,
+        complete: true,
+      });
+    }
     return { success: true, asset, path: dest };
   } catch (error) {
+    if (mainWindow) {
+      mainWindow.webContents.send('jan:download-progress', {
+        progress: 0,
+        error: error.message,
+      });
+    }
     return { success: false, error: error.message };
   }
 });
@@ -1401,6 +1438,56 @@ ipcMain.handle('system:info', () => ({
   database: db ? 'sqlite' : 'memory',
   keychain: Boolean(keytar),
 }));
+
+ipcMain.handle('system:health', async () => {
+  const [janStatus, ollamaStatus, lmStudioStatus] = await Promise.all([
+    getJanEngineStatus(),
+    fetchJson('http://localhost:11434/api/tags', 1200),
+    fetchJson('http://localhost:1234/v1/models', 1200),
+  ]);
+
+  return {
+    success: true,
+    version: app.getVersion(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    capabilities: getPcCapabilities(),
+    jan: janStatus,
+    ollama: ollamaStatus,
+    lmStudio: lmStudioStatus,
+    database: db ? 'sqlite' : 'memory',
+    keychain: Boolean(keytar),
+    timestamp: new Date().toISOString(),
+  };
+});
+
+ipcMain.handle('app:check-update', async () => {
+  try {
+    const client = requireAxios();
+    const response = await client.get('https://api.github.com/repos/silva2kand/aion-os/releases/latest', {
+      headers: { 'User-Agent': 'AionOS' },
+      timeout: 5000,
+    });
+    const latestVersion = String(response.data.tag_name || '').replace(/^v/i, '');
+    const currentVersion = app.getVersion();
+
+    return {
+      success: true,
+      hasUpdate: Boolean(latestVersion && latestVersion !== currentVersion),
+      currentVersion,
+      latestVersion,
+      releaseNotes: response.data.body || '',
+      downloadUrl: response.data.html_url,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      hasUpdate: false,
+      currentVersion: app.getVersion(),
+      error: error.message,
+    };
+  }
+});
 
 function fetchJson(url, timeout = 3000, pickModels = (json) => json.data || json.models || []) {
   return new Promise((resolve) => {

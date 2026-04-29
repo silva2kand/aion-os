@@ -33,7 +33,6 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@electron/rebuild": "^3.7.0",
-    "electron-rebuild": "^3.2.9"
+    "@electron/rebuild": "^3.7.2"
   }
 }
