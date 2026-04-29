@@ -4,9 +4,9 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "rebuild": "@electron/rebuild -f -w better-sqlite3 -w keytar -w node-pty",
-    "postinstall": "@electron/rebuild -f -w better-sqlite3 -w keytar -w node-pty",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue; & .\\\\node_modules\\\\electron\\\\dist\\\\electron.exe .\"",
+    "rebuild": "electron-rebuild -f -o better-sqlite3,keytar",
+    "postinstall": "electron-rebuild -f -o better-sqlite3,keytar",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

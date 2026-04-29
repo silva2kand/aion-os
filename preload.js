@@ -30,9 +30,14 @@ contextBridge.exposeInMainWorld('electron', {
   
   // Local Models
   local: {
+    models: {
+      catalog: () => ipcRenderer.invoke('ai:models:catalog'),
+      search: (params) => ipcRenderer.invoke('ai:models:search', params)
+    },
     ollama: {
       chat: (params) => ipcRenderer.invoke('ai:ollama:chat', params),
       list: (params) => ipcRenderer.invoke('ai:ollama:list', params),
+      pull: (params) => ipcRenderer.invoke('ai:ollama:pull', params),
       detect: () => ipcRenderer.invoke('ai:detect:ollama'),
       models: () => ipcRenderer.invoke('ai:ollama:models')
     },
@@ -44,7 +49,18 @@ contextBridge.exposeInMainWorld('electron', {
     jan: {
       chat: (params) => ipcRenderer.invoke('ai:jan:chat', params),
       detect: () => ipcRenderer.invoke('ai:detect:jan'),
-      models: () => ipcRenderer.invoke('ai:jan:models')
+      models: () => ipcRenderer.invoke('ai:jan:models'),
+      turboquants: () => ipcRenderer.invoke('ai:jan:turboquants'),
+      engine: {
+        status: () => ipcRenderer.invoke('jan:engine:status'),
+        models: () => ipcRenderer.invoke('jan:engine:models'),
+        serve: (params) => ipcRenderer.invoke('jan:engine:serve', params),
+        openFolder: () => ipcRenderer.invoke('jan:engine:folder'),
+        syncCli: () => ipcRenderer.invoke('jan:engine:sync-cli'),
+        latestInstaller: () => ipcRenderer.invoke('jan:engine:latest-installer'),
+        downloadInstaller: () => ipcRenderer.invoke('jan:engine:download-installer'),
+        runInstaller: (params) => ipcRenderer.invoke('jan:engine:run-installer', params)
+      }
     }
   },
   
@@ -93,6 +109,19 @@ contextBridge.exposeInMainWorld('electron', {
   app: {
     open: (params) => ipcRenderer.invoke('app:open', params),
     detect: () => ipcRenderer.invoke('app:detect')
+  },
+
+  // Email channels
+  email: {
+    outlook: {
+      status: () => ipcRenderer.invoke('email:outlook:status'),
+      list: (params) => ipcRenderer.invoke('email:outlook:list', params),
+      send: (params) => ipcRenderer.invoke('email:outlook:send', params),
+      organize: (params) => ipcRenderer.invoke('email:outlook:organize', params)
+    },
+    gmail: {
+      open: () => ipcRenderer.invoke('email:gmail:open')
+    }
   },
   
   // Settings

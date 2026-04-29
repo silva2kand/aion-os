@@ -40,6 +40,12 @@ npm-debug.log*
 # Electron
 electron-builder.yml
 
+# Downloaded third-party installers / local engine binaries
+bin/jan/downloads/
+bin/jan/*.exe
+bin/jan/*.dll
+bin/jan/*.zip
+
 # Database files (if any)
 *.db
 *.sqlite
